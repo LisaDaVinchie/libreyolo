@@ -187,7 +187,9 @@ def _window_origin(size, window, low, high):
     return random.randint(first, max(first, last))
 
 
-def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6, aspect=None):
+def zoom_to_boxes(
+    image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6, aspect=None, margin=0.0
+):
     """Random zoom-in crop that keeps one box whole.
 
     A magnification ``z`` is drawn from ``zoom_range`` and a window of ``1 / z``
@@ -208,6 +210,12 @@ def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6, aspect=N
     and a square input the padding shrinks as ``z`` grows until, from
     ``z = height / width`` on, the window is a full square.
 
+    With ``margin`` the anchor is kept whole with room around it: it counts as
+    grown by that fraction of its width and height on each side, as far as the
+    image reaches, so at the largest zooms the object does not end flush against
+    the window. The largest share of the window an object can take is then
+    ``1 / (1 + 2 * margin)``.
+
     The other boxes are shifted with the window, clipped to it, and kept only
     when at least ``min_visible`` of their area is still inside, so a sliver of
     an object is never labelled as one. Without boxes the window is placed
@@ -220,6 +228,7 @@ def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6, aspect=N
             this is a zoom-in, never a zoom-out.
         min_visible: area fraction of a box the window must contain to keep it.
         aspect: width / height of the window; ``None`` is the image's own.
+        margin: room kept around the anchor, as a fraction of its size per side.
 
     Returns:
         ``(crop, kept_boxes, keep)``: ``kept_boxes`` are the surviving boxes in
@@ -236,6 +245,8 @@ def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6, aspect=N
         )
     if aspect is not None and not aspect > 0:
         raise ValueError(f"aspect must be a positive width / height. Got {aspect}")
+    if margin < 0:
+        raise ValueError(f"margin must not be negative. Got {margin}")
     height, width = image.shape[:2]
     # The rectangle the window is a 1 / z part of: the image itself, or the
     # smallest one of the asked shape that holds it.
@@ -252,6 +263,16 @@ def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6, aspect=N
     anchor = None
     if len(boxes) > 0:
         anchor = boxes[random.randrange(len(boxes))]
+        pad_w, pad_h = (
+            margin * (anchor[2] - anchor[0]),
+            margin * (anchor[3] - anchor[1]),
+        )
+        anchor = (
+            max(anchor[0] - pad_w, 0.0),
+            max(anchor[1] - pad_h, 0.0),
+            min(anchor[2] + pad_w, float(width)),
+            min(anchor[3] + pad_h, float(height)),
+        )
         anchor_w = math.ceil(anchor[2]) - math.floor(anchor[0])
         anchor_h = math.ceil(anchor[3]) - math.floor(anchor[1])
         zoom = max(1.0, min(zoom, full_w / max(anchor_w, 1), full_h / max(anchor_h, 1)))

@@ -313,6 +313,7 @@ FAMILY_EXTRA_AUG_KNOBS: Dict[str, Dict[str, str]] = {
         "zoom": "Box-aware zoom-in probability (task='detect' only).",
         "zoom_range": "Magnification range of the zoom, (low, high) with low >= 1.",
         "zoom_fill": "Zoom window in the network input's shape (no padding) or the image's.",
+        "zoom_margin": "Room kept around the zoomed-to box, as a fraction of its size per side.",
     },
     "yolo9_e2e": {
         "copy_paste": "Copy-paste instance augmentation probability (task='segment' only).",

@@ -362,6 +362,9 @@ class YOLO9Config(TrainConfig):
     # The zoom window takes the network input's shape, so a zoomed sample has
     # no letterbox padding; False keeps the image's own shape.
     zoom_fill: bool = True
+    # Room kept around the box the zoom keeps whole, as a fraction of its size
+    # per side: the object takes at most 1 / (1 + 2 * zoom_margin) of the sample.
+    zoom_margin: float = 0.1
 
 
 @dataclass(kw_only=True)

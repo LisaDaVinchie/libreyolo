@@ -68,6 +68,7 @@ class YOLO9TrainTransform:
         zoom_prob=0.0,
         zoom_range=(1.0, 2.0),
         zoom_fill=True,
+        zoom_margin=0.1,
     ):
         """
         Args:
@@ -95,6 +96,9 @@ class YOLO9TrainTransform:
                 a zoomed sample fills it with no letterbox padding (the
                 default). ``False`` keeps the image's own shape, padding and
                 all, as an unzoomed sample has it.
+            zoom_margin: Room the zoom keeps around the box it zooms to, as a
+                fraction of the box's size per side, so that the largest zooms
+                do not put the object flush against the sample's edges.
         """
         if zoom_prob > 0:
             low, high = zoom_range
@@ -103,6 +107,8 @@ class YOLO9TrainTransform:
                     "zoom_range must satisfy 1 <= low <= high (zoom-in only). "
                     f"Got {zoom_range}"
                 )
+            if zoom_margin < 0:
+                raise ValueError(f"zoom_margin must not be negative. Got {zoom_margin}")
         self.max_labels = max_labels
         self.flip_prob = flip_prob
         self.vertical_flip_prob = (
@@ -115,6 +121,7 @@ class YOLO9TrainTransform:
         self.zoom_prob = zoom_prob
         self.zoom_range = tuple(zoom_range)
         self.zoom_fill = zoom_fill
+        self.zoom_margin = zoom_margin
         self._zoom_warned = False
 
     @property
@@ -125,7 +132,9 @@ class YOLO9TrainTransform:
     def _zoom(self, image, boxes, input_dim):
         """:func:`zoom_to_boxes` with this transform's range and window shape."""
         aspect = input_dim[1] / input_dim[0] if self.zoom_fill else None
-        return zoom_to_boxes(image, boxes, self.zoom_range, aspect=aspect)
+        return zoom_to_boxes(
+            image, boxes, self.zoom_range, aspect=aspect, margin=self.zoom_margin
+        )
 
     def _zoom_fires(self, return_masks, angles):
         """Whether this sample is zoomed. Draws nothing when zoom is off."""

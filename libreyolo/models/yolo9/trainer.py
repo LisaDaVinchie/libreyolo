@@ -112,6 +112,7 @@ class YOLO9Trainer(BaseTrainer):
             zoom_prob=getattr(self.config, "zoom", 0.0),
             zoom_range=tuple(getattr(self.config, "zoom_range", (1.0, 2.0))),
             zoom_fill=getattr(self.config, "zoom_fill", True),
+            zoom_margin=getattr(self.config, "zoom_margin", 0.1),
         )
         return preproc, YOLO9MosaicMixupDataset
 

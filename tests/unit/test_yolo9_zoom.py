@@ -139,6 +139,25 @@ def test_zoom_fill_magnifies_as_much_as_the_image_s_own_shape_does():
     assert widths[0] == pytest.approx(widths[1], rel=0.02)
 
 
+def test_the_largest_zoom_leaves_the_margin_around_the_object():
+    """A zoom far past what fits: the object takes 1 / (1 + 2 * margin) of the sample."""
+    img, targets = _scene(box=(80, 150, 120, 190))  # 40 x 40
+    for margin, share in [(0.0, 1.0), (0.1, 1 / 1.2), (0.5, 0.5)]:
+        random.seed(2)
+        _, padded = _transform(
+            zoom_prob=1.0, zoom_range=(60.0, 60.0), zoom_margin=margin
+        )(img.copy(), targets.copy(), _INPUT)
+        _cls, x1, y1, x2, y2 = _rows(padded)[0]
+        assert x2 - x1 == pytest.approx(share, abs=0.04)
+        assert y2 - y1 == pytest.approx(share, abs=0.04)
+
+
+def test_the_margin_defaults_to_a_tenth_and_a_negative_one_is_refused():
+    assert _transform(zoom_prob=0.5).zoom_margin == 0.1
+    with pytest.raises(ValueError):
+        _transform(zoom_prob=0.5, zoom_margin=-0.1)
+
+
 def test_zoom_probability_is_a_probability():
     img, targets = _scene()
     _, plain = _transform()(img.copy(), targets.copy(), _INPUT)

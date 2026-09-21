@@ -371,3 +371,61 @@ def test_zoom_keeps_one_box_whole_in_a_window_of_any_shape(aspect):
 def test_zoom_refuses_an_aspect_that_is_not_a_shape(aspect):
     with pytest.raises(ValueError):
         zoom_to_boxes(_coordinate_image(20, 20), np.zeros((0, 4)), aspect=aspect)
+
+
+def test_zoom_margin_of_zero_is_the_default():
+    img = _coordinate_image(120, 80)
+    boxes = np.array(
+        [[30.0, 50.0, 40.0, 62.0], [5.0, 5.0, 20.0, 30.0]], dtype=np.float32
+    )
+    outputs = []
+    for kwargs in ({}, {"margin": 0.0}):
+        random.seed(13)
+        outputs.append(
+            zoom_to_boxes(img, boxes.copy(), zoom_range=(1.0, 6.0), **kwargs)
+        )
+    for first, second in zip(*outputs):
+        assert np.array_equal(first, second)
+
+
+@pytest.mark.parametrize("aspect", [None, 1.0])
+def test_zoom_margin_keeps_room_around_the_box_as_far_as_the_image_reaches(aspect):
+    rng = np.random.default_rng(4)
+    height, width, margin = 300, 200, 0.25
+    img = _coordinate_image(height, width)
+    for seed in range(200):
+        box = _random_boxes(rng, 1, height, width)
+        random.seed(seed)
+        crop, kept, keep = zoom_to_boxes(
+            img, box.copy(), zoom_range=(1.0, 40.0), aspect=aspect, margin=margin
+        )
+        assert keep.all()
+        y0, x0 = (int(v) for v in crop[0, 0])
+        win_h, win_w = crop.shape[:2]
+        x1, y1, x2, y2 = box[0]
+        pad_w, pad_h = margin * (x2 - x1), margin * (y2 - y1)
+        # One pixel of slack: the window is a whole number of pixels.
+        assert kept[0, 0] >= min(pad_w, x1) - 1
+        assert kept[0, 1] >= min(pad_h, y1) - 1
+        assert win_w - kept[0, 2] >= min(pad_w, width - x2) - 1
+        assert win_h - kept[0, 3] >= min(pad_h, height - y2) - 1
+        assert x0 >= 0 and y0 >= 0
+
+
+def test_zoom_margin_caps_the_share_of_the_window_a_box_can_take():
+    """A 40 px box, a zoom far past what fits: the window stops at 40 * (1 + 2 * 0.25)."""
+    img = _coordinate_image(400, 400)
+    box = np.array([[180.0, 180.0, 220.0, 220.0]], dtype=np.float32)
+    for seed in range(30):
+        random.seed(seed)
+        tight, _, _ = zoom_to_boxes(img, box.copy(), zoom_range=(50.0, 50.0))
+        roomy, _, _ = zoom_to_boxes(
+            img, box.copy(), zoom_range=(50.0, 50.0), margin=0.25
+        )
+        assert tight.shape[:2] == (40, 40)
+        assert roomy.shape[:2] == (60, 60)
+
+
+def test_zoom_refuses_a_negative_margin():
+    with pytest.raises(ValueError):
+        zoom_to_boxes(_coordinate_image(20, 20), np.zeros((0, 4)), margin=-0.1)
