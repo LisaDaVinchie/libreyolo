@@ -67,6 +67,7 @@ class YOLO9TrainTransform:
         rot90_prob=0.0,
         zoom_prob=0.0,
         zoom_range=(1.0, 2.0),
+        zoom_fill=True,
     ):
         """
         Args:
@@ -90,6 +91,10 @@ class YOLO9TrainTransform:
                 full-resolution decodes. Axis-aligned detection only: samples
                 with segments or angle targets are left unzoomed.
             zoom_range: ``(low, high)`` magnification, ``1 <= low <= high``.
+            zoom_fill: The zoom window takes the shape of the network input, so
+                a zoomed sample fills it with no letterbox padding (the
+                default). ``False`` keeps the image's own shape, padding and
+                all, as an unzoomed sample has it.
         """
         if zoom_prob > 0:
             low, high = zoom_range
@@ -109,12 +114,18 @@ class YOLO9TrainTransform:
         self.rot90_prob = rot90_prob
         self.zoom_prob = zoom_prob
         self.zoom_range = tuple(zoom_range)
+        self.zoom_fill = zoom_fill
         self._zoom_warned = False
 
     @property
     def wants_unresized_image(self):
         """Ask the dataset for the source image, but only while zoom is on."""
         return self.zoom_prob > 0
+
+    def _zoom(self, image, boxes, input_dim):
+        """:func:`zoom_to_boxes` with this transform's range and window shape."""
+        aspect = input_dim[1] / input_dim[0] if self.zoom_fill else None
+        return zoom_to_boxes(image, boxes, self.zoom_range, aspect=aspect)
 
     def _zoom_fires(self, return_masks, angles):
         """Whether this sample is zoomed. Draws nothing when zoom is off."""
@@ -171,7 +182,7 @@ class YOLO9TrainTransform:
             # (issue #484). Same op order and RNG-draw pattern as the labeled
             # path below.
             if self._zoom_fires(return_masks, angles):
-                image, _, _ = zoom_to_boxes(image, boxes, self.zoom_range)
+                image, _, _ = self._zoom(image, boxes, input_dim)
             if random.random() < self.hsv_prob:
                 augment_hsv(image)
             if random.random() < self.flip_prob:
@@ -200,7 +211,7 @@ class YOLO9TrainTransform:
         # dataset handed over (the unresized one while zoom is on) and every
         # later op works on the crop.
         if self._zoom_fires(return_masks, angles):
-            image, boxes, keep = zoom_to_boxes(image, boxes, self.zoom_range)
+            image, boxes, keep = self._zoom(image, boxes, input_dim)
             labels = labels[keep]
 
         # Apply a random k*90-degree rotation for oriented boxes. Off by

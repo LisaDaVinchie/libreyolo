@@ -359,6 +359,9 @@ class YOLO9Config(TrainConfig):
     # decodes. Axis-aligned detection only.
     zoom: float = 0.0
     zoom_range: Tuple[float, float] = (1.0, 2.0)
+    # The zoom window takes the network input's shape, so a zoomed sample has
+    # no letterbox padding; False keeps the image's own shape.
+    zoom_fill: bool = True
 
 
 @dataclass(kw_only=True)

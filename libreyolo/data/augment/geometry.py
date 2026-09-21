@@ -187,7 +187,7 @@ def _window_origin(size, window, low, high):
     return random.randint(first, max(first, last))
 
 
-def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6):
+def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6, aspect=None):
     """Random zoom-in crop that keeps one box whole.
 
     A magnification ``z`` is drawn from ``zoom_range`` and a window of ``1 / z``
@@ -198,6 +198,15 @@ def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6):
     size: the magnification happens when the caller resizes it to the network
     input, so a crop of a frame larger than that input carries real detail
     rather than interpolated pixels.
+
+    With ``aspect`` (width / height, the network input's) the window takes that
+    shape instead of the image's, so the letterboxed crop fills the input with
+    no padding. ``z`` keeps its meaning: objects come out ``z`` times larger
+    than in the letterboxed whole image. The window is therefore ``1 / z`` of
+    the smallest rectangle of that shape that holds the image, cut to the
+    image: at ``z = 1`` it is still the whole image, and for a portrait image
+    and a square input the padding shrinks as ``z`` grows until, from
+    ``z = height / width`` on, the window is a full square.
 
     The other boxes are shifted with the window, clipped to it, and kept only
     when at least ``min_visible`` of their area is still inside, so a sliver of
@@ -210,6 +219,7 @@ def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6):
         zoom_range: ``(low, high)`` magnification with ``1 <= low <= high``;
             this is a zoom-in, never a zoom-out.
         min_visible: area fraction of a box the window must contain to keep it.
+        aspect: width / height of the window; ``None`` is the image's own.
 
     Returns:
         ``(crop, kept_boxes, keep)``: ``kept_boxes`` are the surviving boxes in
@@ -224,7 +234,13 @@ def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6):
         raise ValueError(
             f"zoom_range must satisfy 1 <= low <= high (zoom-in only). Got {zoom_range}"
         )
+    if aspect is not None and not aspect > 0:
+        raise ValueError(f"aspect must be a positive width / height. Got {aspect}")
     height, width = image.shape[:2]
+    # The rectangle the window is a 1 / z part of: the image itself, or the
+    # smallest one of the asked shape that holds it.
+    full_w = width if aspect is None else max(width, height * aspect)
+    full_h = height if aspect is None else max(width / aspect, height)
     dtype = (
         boxes.dtype
         if isinstance(boxes, np.ndarray) and boxes.dtype.kind == "f"
@@ -238,10 +254,10 @@ def zoom_to_boxes(image, boxes, zoom_range=(1.0, 1.0), min_visible=0.6):
         anchor = boxes[random.randrange(len(boxes))]
         anchor_w = math.ceil(anchor[2]) - math.floor(anchor[0])
         anchor_h = math.ceil(anchor[3]) - math.floor(anchor[1])
-        zoom = max(1.0, min(zoom, width / max(anchor_w, 1), height / max(anchor_h, 1)))
+        zoom = max(1.0, min(zoom, full_w / max(anchor_w, 1), full_h / max(anchor_h, 1)))
 
-    win_w = min(width, max(1, round(width / zoom)))
-    win_h = min(height, max(1, round(height / zoom)))
+    win_w = min(width, max(1, round(full_w / zoom)))
+    win_h = min(height, max(1, round(full_h / zoom)))
     if anchor is not None:
         x0 = _window_origin(width, win_w, anchor[0], anchor[2])
         y0 = _window_origin(height, win_h, anchor[1], anchor[3])

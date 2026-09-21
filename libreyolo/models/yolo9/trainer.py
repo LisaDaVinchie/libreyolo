@@ -111,6 +111,7 @@ class YOLO9Trainer(BaseTrainer):
             rot90_prob=getattr(self.config, "rot90", 0.0),
             zoom_prob=getattr(self.config, "zoom", 0.0),
             zoom_range=tuple(getattr(self.config, "zoom_range", (1.0, 2.0))),
+            zoom_fill=getattr(self.config, "zoom_fill", True),
         )
         return preproc, YOLO9MosaicMixupDataset
 

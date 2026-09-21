@@ -102,6 +102,43 @@ def test_zoom_magnifies_the_object_and_keeps_it_whole():
         assert out[:, cy, cx].min() > 0.7
 
 
+def _padded_columns(image):
+    """Trailing columns of a CHW sample that are nothing but letterbox padding."""
+    padding = np.isclose(image, 114 / 255, atol=1e-3).all(axis=(0, 1))
+    return int(padding[::-1].argmin()) if not padding.all() else len(padding)
+
+
+def test_a_zoomed_sample_fills_the_input_unless_told_to_keep_the_image_s_shape():
+    """The 360 x 200 scene letterboxes into 64 x 64 with 29 columns of padding."""
+    img, targets = _scene()
+    plain, _ = _transform()(img.copy(), targets.copy(), _INPUT)
+    band = _padded_columns(plain)
+    assert band == 64 - int(200 * 64 / 360)
+    random.seed(5)
+    filled, _ = _transform(zoom_prob=1.0, zoom_range=(3.0, 3.0))(
+        img.copy(), targets.copy(), _INPUT
+    )
+    assert _padded_columns(filled) == 0
+    random.seed(5)
+    kept, _ = _transform(zoom_prob=1.0, zoom_range=(3.0, 3.0), zoom_fill=False)(
+        img.copy(), targets.copy(), _INPUT
+    )
+    assert _padded_columns(kept) == band
+
+
+def test_zoom_fill_magnifies_as_much_as_the_image_s_own_shape_does():
+    """Filling the input changes what surrounds the object, not how large it comes out."""
+    img, targets = _scene()
+    widths = []
+    for fill in (True, False):
+        random.seed(9)
+        _, padded = _transform(zoom_prob=1.0, zoom_range=(3.0, 3.0), zoom_fill=fill)(
+            img.copy(), targets.copy(), _INPUT
+        )
+        widths.append(_rows(padded)[0, 3] - _rows(padded)[0, 1])
+    assert widths[0] == pytest.approx(widths[1], rel=0.02)
+
+
 def test_zoom_probability_is_a_probability():
     img, targets = _scene()
     _, plain = _transform()(img.copy(), targets.copy(), _INPUT)

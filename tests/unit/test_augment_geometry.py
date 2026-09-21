@@ -307,3 +307,67 @@ def test_zoom_draws_from_the_random_module_only():
         outputs.append((crop, kept, keep))
     for first, second in zip(*outputs):
         assert np.array_equal(first, second)
+
+
+def test_zoom_window_takes_the_asked_shape_once_the_zoom_allows_it():
+    """120 x 80 portrait, square window: 1 / z of the 120 x 120 square that holds it."""
+    img = _coordinate_image(120, 80)
+    boxes = np.array([[30.0, 50.0, 40.0, 62.0]], dtype=np.float32)
+    for zoom, shape in [
+        (1.0, (120, 80)),
+        (1.2, (100, 80)),
+        (1.5, (80, 80)),
+        (4.0, (30, 30)),
+    ]:
+        random.seed(0)
+        crop, _kept, keep = zoom_to_boxes(
+            img, boxes.copy(), zoom_range=(zoom, zoom), aspect=1.0
+        )
+        assert crop.shape[:2] == shape, f"zoom {zoom}"
+        assert keep.all()
+
+
+def test_zoom_with_the_image_s_own_aspect_is_the_default():
+    img = _coordinate_image(120, 80)
+    boxes = np.array(
+        [[30.0, 50.0, 40.0, 62.0], [5.0, 5.0, 20.0, 30.0]], dtype=np.float32
+    )
+    outputs = []
+    for aspect in (None, 80 / 120):
+        random.seed(11)
+        outputs.append(
+            zoom_to_boxes(img, boxes.copy(), zoom_range=(1.0, 4.0), aspect=aspect)
+        )
+    for first, second in zip(*outputs):
+        assert np.array_equal(first, second)
+
+
+@pytest.mark.parametrize("aspect", [1.0, 0.5, 2.0])
+def test_zoom_keeps_one_box_whole_in_a_window_of_any_shape(aspect):
+    rng = np.random.default_rng(2)
+    height, width = 200, 140
+    img = _coordinate_image(height, width)
+    for seed in range(150):
+        boxes = _random_boxes(rng, int(rng.integers(1, 5)), height, width)
+        random.seed(seed)
+        crop, kept, keep = zoom_to_boxes(
+            img, boxes.copy(), zoom_range=(1.0, 6.0), aspect=aspect
+        )
+        y0, x0 = (int(v) for v in crop[0, 0])
+        win_h, win_w = crop.shape[:2]
+        assert np.array_equal(crop, img[y0 : y0 + win_h, x0 : x0 + win_w])
+        shifted = boxes - np.array([x0, y0, x0, y0], dtype=np.float32)
+        inside = (
+            (shifted[:, 0] >= 0)
+            & (shifted[:, 1] >= 0)
+            & (shifted[:, 2] <= win_w)
+            & (shifted[:, 3] <= win_h)
+        )
+        assert inside.any() and keep[inside].all()
+        assert len(kept) == keep.sum()
+
+
+@pytest.mark.parametrize("aspect", [0.0, -1.0])
+def test_zoom_refuses_an_aspect_that_is_not_a_shape(aspect):
+    with pytest.raises(ValueError):
+        zoom_to_boxes(_coordinate_image(20, 20), np.zeros((0, 4)), aspect=aspect)

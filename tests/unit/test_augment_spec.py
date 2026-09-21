@@ -213,6 +213,7 @@ def test_yolo9_transform_plumbing():
         rot90=0.25,
         zoom=0.5,
         zoom_range=[1.0, 4.0],  # a list, as a YAML config spells it
+        zoom_fill=False,
     )
     preproc, wrapper_cls = trainer.create_transforms()
     assert preproc.flip_prob == FLIP
@@ -221,6 +222,7 @@ def test_yolo9_transform_plumbing():
     assert preproc.rot90_prob == 0.25
     assert preproc.zoom_prob == 0.5
     assert preproc.zoom_range == (1.0, 4.0)
+    assert preproc.zoom_fill is False
     assert wrapper_cls is YOLO9MosaicMixupDataset
 
 
@@ -229,6 +231,7 @@ def test_yolo9_zoom_is_off_unless_asked_for():
 
     preproc, _ = _make_trainer(YOLO9Trainer).create_transforms()
     assert preproc.zoom_prob == 0.0
+    assert preproc.zoom_fill is True
     assert preproc.wants_unresized_image is False
 
 
