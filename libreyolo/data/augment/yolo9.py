@@ -28,6 +28,7 @@ from .geometry import (  # noqa: F401
     mirror,
     random_affine,
     rot90_image_boxes,
+    zoom_to_boxes,
 )
 from .segments import (
     copy_segments as _copy_segments,
@@ -64,6 +65,8 @@ class YOLO9TrainTransform:
         output_label_dim=None,
         flipud=None,
         rot90_prob=0.0,
+        zoom_prob=0.0,
+        zoom_range=(1.0, 2.0),
     ):
         """
         Args:
@@ -78,7 +81,23 @@ class YOLO9TrainTransform:
                 1..3). Intended for oriented-box (OBB) training; it is only
                 applied when the sample carries angle targets and draws no
                 random numbers when disabled.
+            zoom_prob: Probability of a random zoom-in that keeps one box whole
+                (:func:`zoom_to_boxes`). Off by default, and it draws no random
+                numbers when disabled. While it is on, the transform asks the
+                dataset for the unresized image (``wants_unresized_image``), so
+                the zoom is cut from the source pixels rather than blown up
+                from the resized frame; the image cache then holds
+                full-resolution decodes. Axis-aligned detection only: samples
+                with segments or angle targets are left unzoomed.
+            zoom_range: ``(low, high)`` magnification, ``1 <= low <= high``.
         """
+        if zoom_prob > 0:
+            low, high = zoom_range
+            if not 1.0 <= low <= high:
+                raise ValueError(
+                    "zoom_range must satisfy 1 <= low <= high (zoom-in only). "
+                    f"Got {zoom_range}"
+                )
         self.max_labels = max_labels
         self.flip_prob = flip_prob
         self.vertical_flip_prob = (
@@ -88,6 +107,28 @@ class YOLO9TrainTransform:
         self.mask_downsample_ratio = mask_downsample_ratio
         self.output_label_dim = output_label_dim
         self.rot90_prob = rot90_prob
+        self.zoom_prob = zoom_prob
+        self.zoom_range = tuple(zoom_range)
+        self._zoom_warned = False
+
+    @property
+    def wants_unresized_image(self):
+        """Ask the dataset for the source image, but only while zoom is on."""
+        return self.zoom_prob > 0
+
+    def _zoom_fires(self, return_masks, angles):
+        """Whether this sample is zoomed. Draws nothing when zoom is off."""
+        if self.zoom_prob <= 0:
+            return False
+        if return_masks or angles is not None:
+            if not self._zoom_warned:
+                logger.warning(
+                    "zoom is set but the samples carry segments or angle targets; "
+                    "the zoom handles axis-aligned boxes only and is being skipped."
+                )
+                self._zoom_warned = True
+            return False
+        return random.random() < self.zoom_prob
 
     def __call__(self, image, targets, input_dim, segments=None):
         """
@@ -129,6 +170,8 @@ class YOLO9TrainTransform:
             # augmented and the model could memorize the exact negatives
             # (issue #484). Same op order and RNG-draw pattern as the labeled
             # path below.
+            if self._zoom_fires(return_masks, angles):
+                image, _, _ = zoom_to_boxes(image, boxes, self.zoom_range)
             if random.random() < self.hsv_prob:
                 augment_hsv(image)
             if random.random() < self.flip_prob:
@@ -152,6 +195,13 @@ class YOLO9TrainTransform:
         labels_o = labels.copy()
         angles_o = angles.copy() if angles is not None else None
         segments_o = _copy_segments(segments_t)
+
+        # Zoom in on one box, keeping it whole. First, so it cuts the image the
+        # dataset handed over (the unresized one while zoom is on) and every
+        # later op works on the crop.
+        if self._zoom_fires(return_masks, angles):
+            image, boxes, keep = zoom_to_boxes(image, boxes, self.zoom_range)
+            labels = labels[keep]
 
         # Apply a random k*90-degree rotation for oriented boxes. Off by
         # default and only meaningful when the sample carries angle targets, so

@@ -352,6 +352,13 @@ class YOLO9Config(TrainConfig):
     # training. Off by default; only applied on the OBB path (samples carrying
     # angle targets) and ignored for axis-aligned detection.
     rot90: float = 0.0
+    # Probability of a random zoom-in that keeps one box whole, and the
+    # magnification range it draws from (1 <= low <= high: never a zoom-out).
+    # Off by default. While on, the train transform reads the unresized image,
+    # so the zoom shows source pixels, and ``cache`` holds full-resolution
+    # decodes. Axis-aligned detection only.
+    zoom: float = 0.0
+    zoom_range: Tuple[float, float] = (1.0, 2.0)
 
 
 @dataclass(kw_only=True)

@@ -310,6 +310,8 @@ FAMILY_EXTRA_AUG_KNOBS: Dict[str, Dict[str, str]] = {
         "copy_paste": "Copy-paste instance augmentation probability (task='segment' only).",
         "copy_paste_mode": "Copy-paste source: 'flip' (same sample mirrored) or 'mixup' (second sample).",
         "rot90": "Random 90-degree rotation probability (detect/OBB).",
+        "zoom": "Box-aware zoom-in probability (task='detect' only).",
+        "zoom_range": "Magnification range of the zoom, (low, high) with low >= 1.",
     },
     "yolo9_e2e": {
         "copy_paste": "Copy-paste instance augmentation probability (task='segment' only).",

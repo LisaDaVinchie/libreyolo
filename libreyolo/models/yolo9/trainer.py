@@ -109,6 +109,8 @@ class YOLO9Trainer(BaseTrainer):
             vertical_flip_prob=getattr(self.config, "flipud", 0.0),
             hsv_prob=self.config.hsv_prob,
             rot90_prob=getattr(self.config, "rot90", 0.0),
+            zoom_prob=getattr(self.config, "zoom", 0.0),
+            zoom_range=tuple(getattr(self.config, "zoom_range", (1.0, 2.0))),
         )
         return preproc, YOLO9MosaicMixupDataset
 

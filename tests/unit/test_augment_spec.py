@@ -206,14 +206,30 @@ def test_yolo9_transform_plumbing():
     from libreyolo.models.yolo9.trainer import YOLO9Trainer
 
     trainer = _make_trainer(
-        YOLO9Trainer, flip_prob=FLIP, hsv_prob=HSV, flipud=FLIPUD, rot90=0.25
+        YOLO9Trainer,
+        flip_prob=FLIP,
+        hsv_prob=HSV,
+        flipud=FLIPUD,
+        rot90=0.25,
+        zoom=0.5,
+        zoom_range=[1.0, 4.0],  # a list, as a YAML config spells it
     )
     preproc, wrapper_cls = trainer.create_transforms()
     assert preproc.flip_prob == FLIP
     assert preproc.hsv_prob == HSV
     assert preproc.vertical_flip_prob == FLIPUD
     assert preproc.rot90_prob == 0.25
+    assert preproc.zoom_prob == 0.5
+    assert preproc.zoom_range == (1.0, 4.0)
     assert wrapper_cls is YOLO9MosaicMixupDataset
+
+
+def test_yolo9_zoom_is_off_unless_asked_for():
+    from libreyolo.models.yolo9.trainer import YOLO9Trainer
+
+    preproc, _ = _make_trainer(YOLO9Trainer).create_transforms()
+    assert preproc.zoom_prob == 0.0
+    assert preproc.wants_unresized_image is False
 
 
 def test_yolo7_transform_plumbing():
